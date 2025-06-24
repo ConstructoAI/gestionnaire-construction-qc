@@ -192,13 +192,7 @@ elif page == "➕ Nouveau Projet":
                 st.success(f"✅ Projet '{nom_projet}' créé avec succès!")
                 st.info(f"📊 Total projets: {len(st.session_state.projets)}")
                 
-                # Réinitialiser les champs après création
-                st.session_state.nom_projet_input = ""
-                st.session_state.client_input = ""
-                st.session_state.adresse_input = ""
-                st.session_state.description_input = ""
-                st.session_state.budget_input = 0.0
-                
+                # Effacer les valeurs sans utiliser les clés de session
                 st.balloons()  # Animation de succès
                 st.rerun()
                 
