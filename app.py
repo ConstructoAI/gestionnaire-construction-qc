@@ -2,13 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import json
+from datetime import datetime, date
 import uuid
 
 # Configuration de la page
 st.set_page_config(
-    page_title="Gestionnaire de Projets Construction QC",
+    page_title="Gestionnaire de Projets Construction - Québec",
     page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -25,425 +24,541 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
+    .project-card {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #2a5298;
+        margin: 1rem 0;
+    }
     .metric-card {
         background: white;
         padding: 1rem;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-left: 4px solid #2a5298;
+        text-align: center;
     }
     .status-actif { color: #28a745; font-weight: bold; }
     .status-pause { color: #ffc107; font-weight: bold; }
     .status-termine { color: #6c757d; font-weight: bold; }
-    .status-retard { color: #dc3545; font-weight: bold; }
+    .status-annule { color: #dc3545; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # Initialisation des données de session
-def init_session_state():
-    if 'projets' not in st.session_state:
-        st.session_state.projets = []
-    if 'taches' not in st.session_state:
-        st.session_state.taches = []
-    if 'entrepreneurs' not in st.session_state:
-        st.session_state.entrepreneurs = []
+if 'projets' not in st.session_state:
+    st.session_state.projets = []
 
-# Types de projets de construction au Québec
-TYPES_PROJETS = [
-    "Résidentiel unifamilial",
-    "Résidentiel multifamilial", 
-    "Commercial",
-    "Industriel",
-    "Infrastructure",
-    "Rénovation",
-    "Agrandissement"
-]
+if 'entrepreneurs' not in st.session_state:
+    st.session_state.entrepreneurs = []
 
-# Phases de construction typiques
-PHASES_CONSTRUCTION = [
-    "Planification",
-    "Permis et autorisations",
-    "Excavation et fondations",
-    "Structure",
-    "Toiture",
-    "Plomberie et électricité",
-    "Isolation et cloisons",
-    "Finition intérieure",
-    "Finition extérieure",
-    "Inspection finale"
-]
+if 'phases' not in st.session_state:
+    st.session_state.phases = []
 
-STATUTS = ["Actif", "En pause", "Terminé", "En retard"]
+# Header principal
+st.markdown("""
+<div class="main-header">
+    <h1>🏗️ Gestionnaire de Projets Construction - Québec</h1>
+    <p>Gérez vos projets de construction en conformité avec les standards québécois</p>
+</div>
+""", unsafe_allow_html=True)
 
-def ajouter_projet():
-    st.subheader("➕ Nouveau Projet")
+# Sidebar pour navigation
+st.sidebar.title("📋 Navigation")
+page = st.sidebar.selectbox(
+    "Choisir une section",
+    ["📊 Tableau de bord", "➕ Nouveau Projet", "🏢 Projets", "👷 Entrepreneurs", "📈 Phases & Suivi", "📋 Licences RBQ"]
+)
+
+# ========== TABLEAU DE BORD ==========
+if page == "📊 Tableau de bord":
+    st.header("📊 Vue d'ensemble")
+    
+    if len(st.session_state.projets) > 0:
+        df_projets = pd.DataFrame(st.session_state.projets)
+        
+        # Métriques principales
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Total Projets", len(df_projets))
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            projets_actifs = len(df_projets[df_projets['statut'] == 'Actif'])
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Projets Actifs", projets_actifs)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col3:
+            budget_total = df_projets['budget'].sum()
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Budget Total", f"{budget_total:,.0f} CAD")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col4:
+            budget_moyen = df_projets['budget'].mean()
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Budget Moyen", f"{budget_moyen:,.0f} CAD")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Graphiques
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📊 Répartition par Statut")
+            status_counts = df_projets['statut'].value_counts()
+            fig_pie = px.pie(
+                values=status_counts.values,
+                names=status_counts.index,
+                title="Distribution des Statuts"
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        
+        with col2:
+            st.subheader("📈 Budgets par Type")
+            fig_bar = px.bar(
+                df_projets,
+                x='type_projet',
+                y='budget',
+                title="Budget par Type de Projet",
+                color='statut'
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+        
+        # Timeline des projets
+        st.subheader("📅 Timeline des Projets")
+        fig_timeline = px.timeline(
+            df_projets,
+            x_start='date_debut',
+            x_end='date_fin_prevue',
+            y='nom_projet',
+            color='statut',
+            title="Calendrier des Projets"
+        )
+        fig_timeline.update_yaxes(autorange="reversed")
+        st.plotly_chart(fig_timeline, use_container_width=True)
+        
+    else:
+        st.info("🏗️ Aucun projet créé. Commencez par ajouter votre premier projet!")
+
+# ========== NOUVEAU PROJET ==========
+elif page == "➕ Nouveau Projet":
+    st.header("➕ Nouveau Projet")
     
     with st.form("nouveau_projet"):
         col1, col2 = st.columns(2)
         
         with col1:
-            nom = st.text_input("Nom du projet*")
-            type_projet = st.selectbox("Type de projet", TYPES_PROJETS)
+            nom_projet = st.text_input("Nom du projet*")
+            type_projet = st.selectbox(
+                "Type de projet",
+                ["Résidentiel unifamilial", "Résidentiel multifamilial", "Commercial", "Industriel", "Institutionnel", "Infrastructure"]
+            )
             client = st.text_input("Client")
             adresse = st.text_area("Adresse du chantier")
-            
+        
         with col2:
-            budget = st.number_input("Budget ($CAD)", min_value=0.0, step=1000.0)
-            date_debut = st.date_input("Date de début")
-            date_fin = st.date_input("Date de fin prévue")
-            statut = st.selectbox("Statut", STATUTS)
-            
+            budget = st.number_input("Budget (CAD)", min_value=0.0, step=1000.0)
+            date_debut = st.date_input("Date de début", value=datetime.now().date())
+            date_fin_prevue = st.date_input("Date de fin prévue", value=datetime.now().date())
+            statut = st.selectbox("Statut", ["Actif", "En pause", "Terminé", "Annulé"])
+        
         description = st.text_area("Description du projet")
         
         submitted = st.form_submit_button("Créer le projet")
         
-        if submitted and nom:
-            nouveau_projet = {
-                'id': str(uuid.uuid4()),
-                'nom': nom,
-                'type': type_projet,
-                'client': client,
-                'adresse': adresse,
-                'budget': budget,
-                'date_debut': date_debut.strftime('%Y-%m-%d'),
-                'date_fin': date_fin.strftime('%Y-%m-%d'),
-                'statut': statut,
-                'description': description,
-                'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M')
-            }
-            st.session_state.projets.append(nouveau_projet)
-            st.success(f"Projet '{nom}' créé avec succès!")
-            st.experimental_rerun()
+        if submitted:
+            if nom_projet:
+                nouveau_projet = {
+                    'id': str(uuid.uuid4()),
+                    'nom_projet': nom_projet,
+                    'type_projet': type_projet,
+                    'client': client,
+                    'adresse': adresse,
+                    'budget': budget,
+                    'date_debut': date_debut,
+                    'date_fin_prevue': date_fin_prevue,
+                    'statut': statut,
+                    'description': description,
+                    'date_creation': datetime.now()
+                }
+                
+                st.session_state.projets.append(nouveau_projet)
+                st.success(f"Projet '{nom_projet}' créé avec succès!")
+                st.rerun()
+            else:
+                st.error("Le nom du projet est obligatoire.")
 
-def afficher_projets():
-    st.subheader("📋 Liste des Projets")
+# ========== GESTION DES PROJETS ==========
+elif page == "🏢 Projets":
+    st.header("🏢 Gestion des Projets")
     
-    if not st.session_state.projets:
-        st.info("Aucun projet créé. Utilisez l'onglet 'Nouveau Projet' pour commencer.")
-        return
-    
-    # Filtres
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        filtre_statut = st.selectbox("Filtrer par statut", ["Tous"] + STATUTS)
-    with col2:
-        filtre_type = st.selectbox("Filtrer par type", ["Tous"] + TYPES_PROJETS)
-    with col3:
-        recherche = st.text_input("Rechercher par nom")
-    
-    # Application des filtres
-    projets_filtres = st.session_state.projets
-    if filtre_statut != "Tous":
-        projets_filtres = [p for p in projets_filtres if p['statut'] == filtre_statut]
-    if filtre_type != "Tous":
-        projets_filtres = [p for p in projets_filtres if p['type'] == filtre_type]
-    if recherche:
-        projets_filtres = [p for p in projets_filtres if recherche.lower() in p['nom'].lower()]
-    
-    # Affichage des projets
-    for i, projet in enumerate(projets_filtres):
-        with st.expander(f"🏗️ {projet['nom']} - {projet['statut']}"):
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.write(f"**Client:** {projet['client']}")
-                st.write(f"**Type:** {projet['type']}")
-                st.write(f"**Adresse:** {projet['adresse']}")
-                
-            with col2:
-                st.write(f"**Budget:** {projet['budget']:,.0f} $CAD")
-                st.write(f"**Début:** {projet['date_debut']}")
-                st.write(f"**Fin prévue:** {projet['date_fin']}")
-                
-            with col3:
-                statut_class = f"status-{projet['statut'].lower().replace(' ', '-').replace('é', 'e')}"
-                st.markdown(f"**Statut:** <span class='{statut_class}'>{projet['statut']}</span>", 
-                          unsafe_allow_html=True)
-                
-                # Calcul du pourcentage d'avancement
-                date_debut = datetime.strptime(projet['date_debut'], '%Y-%m-%d')
-                date_fin = datetime.strptime(projet['date_fin'], '%Y-%m-%d')
-                date_actuelle = datetime.now()
-                
-                if date_actuelle < date_debut:
-                    progression = 0
-                elif date_actuelle > date_fin:
-                    progression = 100
-                else:
-                    duree_totale = (date_fin - date_debut).days
-                    duree_ecoulee = (date_actuelle - date_debut).days
-                    progression = min(100, max(0, (duree_ecoulee / duree_totale) * 100))
-                
-                st.progress(progression / 100)
-                st.write(f"**Progression:** {progression:.1f}%")
-            
-            if st.button(f"Supprimer {projet['nom']}", key=f"del_{projet['id']}"):
-                st.session_state.projets = [p for p in st.session_state.projets if p['id'] != projet['id']]
-                st.experimental_rerun()
-
-def gestion_taches():
-    st.subheader("✅ Gestion des Tâches")
-    
-    if not st.session_state.projets:
-        st.warning("Créez d'abord un projet pour ajouter des tâches.")
-        return
-    
-    # Sélection du projet
-    noms_projets = [p['nom'] for p in st.session_state.projets]
-    projet_selectionne = st.selectbox("Sélectionner un projet", noms_projets)
-    
-    if projet_selectionne:
-        projet_id = next(p['id'] for p in st.session_state.projets if p['nom'] == projet_selectionne)
+    if len(st.session_state.projets) > 0:
+        # Filtres
+        col1, col2, col3 = st.columns(3)
         
-        # Ajout de nouvelle tâche
-        with st.expander("➕ Ajouter une tâche"):
-            with st.form("nouvelle_tache"):
+        with col1:
+            filtre_statut = st.multiselect(
+                "Filtrer par statut",
+                ["Actif", "En pause", "Terminé", "Annulé"],
+                default=["Actif", "En pause"]
+            )
+        
+        with col2:
+            filtre_type = st.multiselect(
+                "Filtrer par type",
+                ["Résidentiel unifamilial", "Résidentiel multifamilial", "Commercial", "Industriel", "Institutionnel", "Infrastructure"]
+            )
+        
+        with col3:
+            recherche = st.text_input("🔍 Rechercher un projet")
+        
+        # Application des filtres
+        df_projets = pd.DataFrame(st.session_state.projets)
+        
+        if filtre_statut:
+            df_projets = df_projets[df_projets['statut'].isin(filtre_statut)]
+        
+        if filtre_type:
+            df_projets = df_projets[df_projets['type_projet'].isin(filtre_type)]
+        
+        if recherche:
+            df_projets = df_projets[
+                df_projets['nom_projet'].str.contains(recherche, case=False, na=False) |
+                df_projets['client'].str.contains(recherche, case=False, na=False)
+            ]
+        
+        # Affichage des projets
+        for idx, projet in df_projets.iterrows():
+            with st.expander(f"🏗️ {projet['nom_projet']} - {projet['statut']}"):
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    nom_tache = st.text_input("Nom de la tâche*")
-                    phase = st.selectbox("Phase de construction", PHASES_CONSTRUCTION)
-                    priorite = st.selectbox("Priorité", ["Faible", "Moyenne", "Élevée", "Critique"])
-                    
+                    st.write(f"**Type:** {projet['type_projet']}")
+                    st.write(f"**Client:** {projet['client']}")
+                    st.write(f"**Budget:** {projet['budget']:,.0f} CAD")
+                    st.write(f"**Statut:** {projet['statut']}")
+                
                 with col2:
-                    date_debut_tache = st.date_input("Date de début", key="tache_debut")
-                    date_fin_tache = st.date_input("Date de fin", key="tache_fin")
-                    statut_tache = st.selectbox("Statut", ["À faire", "En cours", "Terminée", "Bloquée"])
+                    st.write(f"**Date début:** {projet['date_debut']}")
+                    st.write(f"**Date fin prévue:** {projet['date_fin_prevue']}")
+                    st.write(f"**Adresse:** {projet['adresse']}")
                 
-                description_tache = st.text_area("Description")
+                if projet['description']:
+                    st.write(f"**Description:** {projet['description']}")
                 
-                if st.form_submit_button("Ajouter la tâche") and nom_tache:
-                    nouvelle_tache = {
-                        'id': str(uuid.uuid4()),
-                        'projet_id': projet_id,
-                        'nom': nom_tache,
-                        'phase': phase,
-                        'priorite': priorite,
-                        'date_debut': date_debut_tache.strftime('%Y-%m-%d'),
-                        'date_fin': date_fin_tache.strftime('%Y-%m-%d'),
-                        'statut': statut_tache,
-                        'description': description_tache
-                    }
-                    st.session_state.taches.append(nouvelle_tache)
-                    st.success("Tâche ajoutée avec succès!")
-                    st.experimental_rerun()
-        
-        # Affichage des tâches du projet
-        taches_projet = [t for t in st.session_state.taches if t['projet_id'] == projet_id]
-        
-        if taches_projet:
-            st.write(f"**Tâches pour le projet: {projet_selectionne}**")
-            
-            for tache in taches_projet:
-                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+                # Actions
+                col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    st.write(f"**{tache['nom']}** - {tache['phase']}")
-                    
+                    if st.button(f"Modifier", key=f"edit_{projet['id']}"):
+                        st.info("Fonctionnalité de modification à implémenter")
+                
                 with col2:
-                    couleur_priorite = {
-                        "Faible": "🟢", "Moyenne": "🟡", 
-                        "Élevée": "🟠", "Critique": "🔴"
-                    }
-                    st.write(f"{couleur_priorite[tache['priorite']]} {tache['priorite']}")
-                    
+                    if st.button(f"Dupliquer", key=f"dup_{projet['id']}"):
+                        nouveau_projet = projet.copy()
+                        nouveau_projet['id'] = str(uuid.uuid4())
+                        nouveau_projet['nom_projet'] = f"{projet['nom_projet']} - Copie"
+                        nouveau_projet['date_creation'] = datetime.now()
+                        st.session_state.projets.append(nouveau_projet)
+                        st.success("Projet dupliqué!")
+                        st.rerun()
+                
                 with col3:
-                    st.write(f"{tache['date_debut']} → {tache['date_fin']}")
-                    
-                with col4:
-                    if st.button("🗑️", key=f"del_tache_{tache['id']}"):
-                        st.session_state.taches = [t for t in st.session_state.taches if t['id'] != tache['id']]
-                        st.experimental_rerun()
-        else:
-            st.info("Aucune tâche pour ce projet.")
+                    if st.button(f"Supprimer", key=f"del_{projet['id']}", type="secondary"):
+                        st.session_state.projets = [p for p in st.session_state.projets if p['id'] != projet['id']]
+                        st.success("Projet supprimé!")
+                        st.rerun()
+    
+    else:
+        st.info("Aucun projet trouvé. Créez votre premier projet!")
 
-def tableau_bord():
-    st.subheader("📊 Tableau de Bord")
+# ========== ENTREPRENEURS ==========
+elif page == "👷 Entrepreneurs":
+    st.header("👷 Gestion des Entrepreneurs")
     
-    if not st.session_state.projets:
-        st.info("Aucune donnée à afficher. Créez des projets pour voir les statistiques.")
-        return
-    
-    # Métriques principales
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Projets totaux", len(st.session_state.projets))
-        
-    with col2:
-        projets_actifs = len([p for p in st.session_state.projets if p['statut'] == 'Actif'])
-        st.metric("Projets actifs", projets_actifs)
-        
-    with col3:
-        budget_total = sum(p['budget'] for p in st.session_state.projets)
-        st.metric("Budget total", f"{budget_total:,.0f} $CAD")
-        
-    with col4:
-        taches_total = len(st.session_state.taches)
-        st.metric("Tâches totales", taches_total)
-    
-    # Graphiques
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Répartition par statut
-        df_statuts = pd.DataFrame(st.session_state.projets)
-        if not df_statuts.empty:
-            statut_counts = df_statuts['statut'].value_counts()
-            fig_statuts = px.pie(
-                values=statut_counts.values,
-                names=statut_counts.index,
-                title="Répartition des projets par statut"
-            )
-            st.plotly_chart(fig_statuts, use_container_width=True)
-    
-    with col2:
-        # Répartition par type
-        if not df_statuts.empty:
-            type_counts = df_statuts['type'].value_counts()
-            fig_types = px.bar(
-                x=type_counts.index,
-                y=type_counts.values,
-                title="Projets par type de construction",
-                labels={'x': 'Type de projet', 'y': 'Nombre de projets'}
-            )
-            fig_types.update_xaxis(tickangle=45)
-            st.plotly_chart(fig_types, use_container_width=True)
-    
-    # Timeline des projets
-    if st.session_state.projets:
-        st.subheader("📅 Timeline des Projets")
-        
-        timeline_data = []
-        for projet in st.session_state.projets:
-            timeline_data.append({
-                'Projet': projet['nom'],
-                'Début': projet['date_debut'],
-                'Fin': projet['date_fin'],
-                'Statut': projet['statut']
-            })
-        
-        df_timeline = pd.DataFrame(timeline_data)
-        df_timeline['Début'] = pd.to_datetime(df_timeline['Début'])
-        df_timeline['Fin'] = pd.to_datetime(df_timeline['Fin'])
-        
-        fig_timeline = px.timeline(
-            df_timeline,
-            x_start="Début",
-            x_end="Fin",
-            y="Projet",
-            color="Statut",
-            title="Calendrier des Projets"
-        )
-        fig_timeline.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig_timeline, use_container_width=True)
-
-def gestion_entrepreneurs():
-    st.subheader("👷 Gestion des Entrepreneurs")
-    
-    # Ajout d'entrepreneur
-    with st.expander("➕ Ajouter un entrepreneur"):
+    # Formulaire pour ajouter un entrepreneur
+    with st.expander("➕ Ajouter un Entrepreneur"):
         with st.form("nouvel_entrepreneur"):
             col1, col2 = st.columns(2)
             
             with col1:
                 nom_entreprise = st.text_input("Nom de l'entreprise*")
-                contact = st.text_input("Personne contact")
+                contact_principal = st.text_input("Contact principal")
                 telephone = st.text_input("Téléphone")
-                
-            with col2:
                 email = st.text_input("Email")
-                specialite = st.selectbox("Spécialité", [
-                    "Excavation", "Fondation", "Charpente", "Toiture",
-                    "Plomberie", "Électricité", "Isolation", "Cloisons sèches",
-                    "Peinture", "Carrelage", "Menuiserie", "Autre"
-                ])
-                licence_rbq = st.text_input("Licence RBQ")
             
-            adresse = st.text_area("Adresse")
+            with col2:
+                licence_rbq = st.text_input("Numéro de licence RBQ")
+                specialites = st.multiselect(
+                    "Spécialités",
+                    ["Général", "Électricité", "Plomberie", "HVAC", "Charpente", "Maçonnerie", "Toiture", "Isolation", "Peinture", "Carrelage"]
+                )
+                statut_entrepreneur = st.selectbox("Statut", ["Actif", "Inactif", "En évaluation"])
+            
             notes = st.text_area("Notes")
             
-            if st.form_submit_button("Ajouter l'entrepreneur") and nom_entreprise:
-                nouvel_entrepreneur = {
-                    'id': str(uuid.uuid4()),
-                    'nom_entreprise': nom_entreprise,
-                    'contact': contact,
-                    'telephone': telephone,
-                    'email': email,
-                    'specialite': specialite,
-                    'licence_rbq': licence_rbq,
-                    'adresse': adresse,
-                    'notes': notes
-                }
-                st.session_state.entrepreneurs.append(nouvel_entrepreneur)
-                st.success("Entrepreneur ajouté avec succès!")
-                st.experimental_rerun()
+            submit_entrepreneur = st.form_submit_button("Ajouter l'entrepreneur")
+            
+            if submit_entrepreneur:
+                if nom_entreprise:
+                    nouvel_entrepreneur = {
+                        'id': str(uuid.uuid4()),
+                        'nom_entreprise': nom_entreprise,
+                        'contact_principal': contact_principal,
+                        'telephone': telephone,
+                        'email': email,
+                        'licence_rbq': licence_rbq,
+                        'specialites': specialites,
+                        'statut': statut_entrepreneur,
+                        'notes': notes,
+                        'date_ajout': datetime.now()
+                    }
+                    
+                    st.session_state.entrepreneurs.append(nouvel_entrepreneur)
+                    st.success(f"Entrepreneur '{nom_entreprise}' ajouté avec succès!")
+                    st.rerun()
+                else:
+                    st.error("Le nom de l'entreprise est obligatoire.")
     
     # Liste des entrepreneurs
-    if st.session_state.entrepreneurs:
-        st.write("**Liste des Entrepreneurs**")
+    if len(st.session_state.entrepreneurs) > 0:
+        st.subheader("📋 Liste des Entrepreneurs")
         
         for entrepreneur in st.session_state.entrepreneurs:
-            with st.expander(f"🏢 {entrepreneur['nom_entreprise']} - {entrepreneur['specialite']}"):
+            with st.expander(f"🏢 {entrepreneur['nom_entreprise']} - {entrepreneur['statut']}"):
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.write(f"**Contact:** {entrepreneur['contact']}")
+                    st.write(f"**Contact:** {entrepreneur['contact_principal']}")
                     st.write(f"**Téléphone:** {entrepreneur['telephone']}")
                     st.write(f"**Email:** {entrepreneur['email']}")
-                    
-                with col2:
-                    st.write(f"**Spécialité:** {entrepreneur['specialite']}")
                     st.write(f"**Licence RBQ:** {entrepreneur['licence_rbq']}")
-                    st.write(f"**Adresse:** {entrepreneur['adresse']}")
                 
-                if entrepreneur['notes']:
-                    st.write(f"**Notes:** {entrepreneur['notes']}")
+                with col2:
+                    st.write(f"**Spécialités:** {', '.join(entrepreneur['specialites'])}")
+                    st.write(f"**Statut:** {entrepreneur['statut']}")
+                    if entrepreneur['notes']:
+                        st.write(f"**Notes:** {entrepreneur['notes']}")
                 
-                if st.button(f"Supprimer {entrepreneur['nom_entreprise']}", key=f"del_entr_{entrepreneur['id']}"):
+                if st.button(f"Supprimer", key=f"del_ent_{entrepreneur['id']}", type="secondary"):
                     st.session_state.entrepreneurs = [e for e in st.session_state.entrepreneurs if e['id'] != entrepreneur['id']]
-                    st.experimental_rerun()
+                    st.success("Entrepreneur supprimé!")
+                    st.rerun()
     else:
         st.info("Aucun entrepreneur enregistré.")
 
-# Interface principale
-def main():
-    init_session_state()
+# ========== PHASES & SUIVI ==========
+elif page == "📈 Phases & Suivi":
+    st.header("📈 Phases & Suivi des Projets")
     
-    # En-tête
-    st.markdown("""
-    <div class="main-header">
-        <h1>🏗️ Gestionnaire de Projets Construction - Québec</h1>
-        <p>Gérez vos projets de construction en conformité avec les standards québécois</p>
-    </div>
-    """, unsafe_allow_html=True)
+    if len(st.session_state.projets) > 0:
+        # Sélection du projet
+        projet_selectionne = st.selectbox(
+            "Sélectionner un projet",
+            options=[p['nom_projet'] for p in st.session_state.projets],
+            key="select_projet_phase"
+        )
+        
+        if projet_selectionne:
+            projet = next(p for p in st.session_state.projets if p['nom_projet'] == projet_selectionne)
+            
+            # Phases prédéfinies pour le Québec
+            phases_standard = [
+                "Permis et autorisations",
+                "Préparation du terrain",
+                "Fondations",
+                "Charpente",
+                "Toiture",
+                "Plomberie",
+                "Électricité",
+                "Isolation",
+                "Cloisons sèches",
+                "Revêtements de sol",
+                "Peinture",
+                "Finitions",
+                "Inspection finale"
+            ]
+            
+            # Ajouter une phase
+            with st.expander("➕ Ajouter une Phase"):
+                with st.form("nouvelle_phase"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        nom_phase = st.selectbox("Phase", phases_standard)
+                        date_debut_phase = st.date_input("Date de début")
+                        date_fin_prevue_phase = st.date_input("Date de fin prévue")
+                    
+                    with col2:
+                        entrepreneur_assigne = st.selectbox(
+                            "Entrepreneur assigné",
+                            ["Non assigné"] + [e['nom_entreprise'] for e in st.session_state.entrepreneurs]
+                        )
+                        statut_phase = st.selectbox("Statut", ["À venir", "En cours", "Terminé", "En retard"])
+                        pourcentage = st.slider("Pourcentage d'avancement", 0, 100, 0)
+                    
+                    cout_prevu = st.number_input("Coût prévu (CAD)", min_value=0.0)
+                    notes_phase = st.text_area("Notes")
+                    
+                    submit_phase = st.form_submit_button("Ajouter la phase")
+                    
+                    if submit_phase:
+                        nouvelle_phase = {
+                            'id': str(uuid.uuid4()),
+                            'projet_id': projet['id'],
+                            'nom_phase': nom_phase,
+                            'date_debut': date_debut_phase,
+                            'date_fin_prevue': date_fin_prevue_phase,
+                            'entrepreneur_assigne': entrepreneur_assigne,
+                            'statut': statut_phase,
+                            'pourcentage': pourcentage,
+                            'cout_prevu': cout_prevu,
+                            'notes': notes_phase,
+                            'date_creation': datetime.now()
+                        }
+                        
+                        st.session_state.phases.append(nouvelle_phase)
+                        st.success(f"Phase '{nom_phase}' ajoutée!")
+                        st.rerun()
+            
+            # Affichage des phases du projet
+            phases_projet = [p for p in st.session_state.phases if p['projet_id'] == projet['id']]
+            
+            if phases_projet:
+                st.subheader(f"📋 Phases de {projet_selectionne}")
+                
+                # Graphique d'avancement
+                df_phases = pd.DataFrame(phases_projet)
+                fig_gantt = px.timeline(
+                    df_phases,
+                    x_start='date_debut',
+                    x_end='date_fin_prevue',
+                    y='nom_phase',
+                    color='statut',
+                    title="Diagramme de Gantt"
+                )
+                fig_gantt.update_yaxes(autorange="reversed")
+                st.plotly_chart(fig_gantt, use_container_width=True)
+                
+                # Liste détaillée des phases
+                for phase in phases_projet:
+                    with st.expander(f"📅 {phase['nom_phase']} - {phase['statut']} ({phase['pourcentage']}%)"):
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.write(f"**Début:** {phase['date_debut']}")
+                            st.write(f"**Fin prévue:** {phase['date_fin_prevue']}")
+                            st.write(f"**Entrepreneur:** {phase['entrepreneur_assigne']}")
+                        
+                        with col2:
+                            st.write(f"**Statut:** {phase['statut']}")
+                            st.write(f"**Avancement:** {phase['pourcentage']}%")
+                            st.write(f"**Coût prévu:** {phase['cout_prevu']:,.0f} CAD")
+                        
+                        with col3:
+                            # Mise à jour du pourcentage
+                            nouveau_pourcentage = st.slider(
+                                "Mettre à jour l'avancement",
+                                0, 100,
+                                phase['pourcentage'],
+                                key=f"progress_{phase['id']}"
+                            )
+                            
+                            if nouveau_pourcentage != phase['pourcentage']:
+                                # Mise à jour dans la session
+                                for i, p in enumerate(st.session_state.phases):
+                                    if p['id'] == phase['id']:
+                                        st.session_state.phases[i]['pourcentage'] = nouveau_pourcentage
+                                        break
+                                st.rerun()
+                        
+                        if phase['notes']:
+                            st.write(f"**Notes:** {phase['notes']}")
+                        
+                        if st.button(f"Supprimer phase", key=f"del_phase_{phase['id']}", type="secondary"):
+                            st.session_state.phases = [p for p in st.session_state.phases if p['id'] != phase['id']]
+                            st.success("Phase supprimée!")
+                            st.rerun()
+            else:
+                st.info("Aucune phase définie pour ce projet.")
+    else:
+        st.info("Créez d'abord un projet pour gérer les phases.")
+
+# ========== LICENCES RBQ ==========
+elif page == "📋 Licences RBQ":
+    st.header("📋 Licences RBQ - Régie du bâtiment du Québec")
     
-    # Barre latérale
-    st.sidebar.title("Navigation")
-    page = st.sidebar.selectbox(
-        "Choisir une section",
-        ["Tableau de Bord", "Projets", "Nouveau Projet", "Tâches", "Entrepreneurs"]
-    )
-    
-    # Informations système
-    st.sidebar.markdown("---")
-    st.sidebar.info(f"""
-    **Projets:** {len(st.session_state.projets)}
-    **Tâches:** {len(st.session_state.taches)}
-    **Entrepreneurs:** {len(st.session_state.entrepreneurs)}
+    st.info("""
+    **Information importante:** Cette section vous aide à suivre les licences RBQ de vos entrepreneurs. 
+    Vérifiez toujours la validité des licences sur le site officiel de la RBQ.
     """)
     
-    # Affichage des pages
-    if page == "Tableau de Bord":
-        tableau_bord()
-    elif page == "Projets":
-        afficher_projets()
-    elif page == "Nouveau Projet":
-        ajouter_projet()
-    elif page == "Tâches":
-        gestion_taches()
-    elif page == "Entrepreneurs":
-        gestion_entrepreneurs()
+    # Vérification des licences des entrepreneurs
+    if len(st.session_state.entrepreneurs) > 0:
+        st.subheader("🔍 Vérification des Licences")
+        
+        entrepreneurs_avec_licence = [e for e in st.session_state.entrepreneurs if e['licence_rbq']]
+        entrepreneurs_sans_licence = [e for e in st.session_state.entrepreneurs if not e['licence_rbq']]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("Entrepreneurs avec licence", len(entrepreneurs_avec_licence))
+        
+        with col2:
+            st.metric("Entrepreneurs sans licence", len(entrepreneurs_sans_licence))
+        
+        if entrepreneurs_avec_licence:
+            st.subheader("✅ Entrepreneurs avec licence RBQ")
+            for entrepreneur in entrepreneurs_avec_licence:
+                with st.expander(f"🏢 {entrepreneur['nom_entreprise']} - {entrepreneur['licence_rbq']}"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**Licence RBQ:** {entrepreneur['licence_rbq']}")
+                        st.write(f"**Spécialités:** {', '.join(entrepreneur['specialites'])}")
+                        st.write(f"**Contact:** {entrepreneur['contact_principal']}")
+                    
+                    with col2:
+                        st.write(f"**Téléphone:** {entrepreneur['telephone']}")
+                        st.write(f"**Email:** {entrepreneur['email']}")
+                        st.write(f"**Statut:** {entrepreneur['statut']}")
+                    
+                    st.info("🔗 Vérifiez cette licence sur: https://www.rbq.gouv.qc.ca/")
+        
+        if entrepreneurs_sans_licence:
+            st.subheader("⚠️ Entrepreneurs sans licence RBQ")
+            for entrepreneur in entrepreneurs_sans_licence:
+                st.warning(f"🏢 {entrepreneur['nom_entreprise']} - Aucune licence RBQ enregistrée")
+    
+    # Informations sur les types de licence RBQ
+    st.subheader("📚 Types de Licences RBQ")
+    
+    types_licence = {
+        "Entrepreneur général": "Construction, rénovation et réparation de bâtiments",
+        "Entrepreneur spécialisé - Électricité": "Installation électrique",
+        "Entrepreneur spécialisé - Plomberie": "Installation de plomberie et chauffage",
+        "Entrepreneur spécialisé - Ventilation": "Système de ventilation et climatisation",
+        "Entrepreneur spécialisé - Réfrigération": "Installation de réfrigération",
+        "Entrepreneur spécialisé - Ascenseurs": "Installation et entretien d'ascenseurs"
+    }
+    
+    for type_licence, description in types_licence.items():
+        st.write(f"**{type_licence}:** {description}")
+    
+    st.markdown("---")
+    st.info("Pour plus d'informations sur les licences RBQ, visitez: https://www.rbq.gouv.qc.ca/")
 
-if __name__ == "__main__":
-    main()
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #666; padding: 1rem;'>
+    Gestionnaire de Projets Construction - Québec | Conforme aux standards québécois<br>
+    Développé pour faciliter la gestion de projets de construction
+</div>
+""", unsafe_allow_html=True)
