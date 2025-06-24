@@ -149,49 +149,77 @@ if page == "📊 Tableau de bord":
 elif page == "➕ Nouveau Projet":
     st.header("➕ Nouveau Projet")
     
-    with st.form("nouveau_projet"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            nom_projet = st.text_input("Nom du projet*")
-            type_projet = st.selectbox(
-                "Type de projet",
-                ["Résidentiel unifamilial", "Résidentiel multifamilial", "Commercial", "Industriel", "Institutionnel", "Infrastructure"]
-            )
-            client = st.text_input("Client")
-            adresse = st.text_area("Adresse du chantier")
-        
-        with col2:
-            budget = st.number_input("Budget (CAD)", min_value=0.0, step=1000.0)
-            date_debut = st.date_input("Date de début", value=datetime.now().date())
-            date_fin_prevue = st.date_input("Date de fin prévue", value=datetime.now().date())
-            statut = st.selectbox("Statut", ["Actif", "En pause", "Terminé", "Annulé"])
-        
-        description = st.text_area("Description du projet")
-        
-        submitted = st.form_submit_button("Créer le projet")
-        
-        if submitted:
-            if nom_projet:
+    # Version alternative sans st.form
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        nom_projet = st.text_input("Nom du projet*", key="nom_projet_input")
+        type_projet = st.selectbox(
+            "Type de projet",
+            ["Résidentiel unifamilial", "Résidentiel multifamilial", "Commercial", "Industriel", "Institutionnel", "Infrastructure"],
+            key="type_projet_input"
+        )
+        client = st.text_input("Client", key="client_input")
+        adresse = st.text_area("Adresse du chantier", key="adresse_input")
+    
+    with col2:
+        budget = st.number_input("Budget (CAD)", min_value=0.0, step=1000.0, key="budget_input")
+        date_debut = st.date_input("Date de début", value=datetime.now().date(), key="date_debut_input")
+        date_fin_prevue = st.date_input("Date de fin prévue", value=datetime.now().date(), key="date_fin_input")
+        statut = st.selectbox("Statut", ["Actif", "En pause", "Terminé", "Annulé"], key="statut_input")
+    
+    description = st.text_area("Description du projet", key="description_input")
+    
+    # Bouton de création
+    if st.button("🚀 Créer le projet", type="primary", key="create_project_btn"):
+        if nom_projet and nom_projet.strip():
+            try:
                 nouveau_projet = {
                     'id': str(uuid.uuid4()),
-                    'nom_projet': nom_projet,
+                    'nom_projet': nom_projet.strip(),
                     'type_projet': type_projet,
-                    'client': client,
-                    'adresse': adresse,
-                    'budget': budget,
+                    'client': client.strip() if client else "",
+                    'adresse': adresse.strip() if adresse else "",
+                    'budget': float(budget) if budget else 0.0,
                     'date_debut': date_debut,
                     'date_fin_prevue': date_fin_prevue,
                     'statut': statut,
-                    'description': description,
+                    'description': description.strip() if description else "",
                     'date_creation': datetime.now()
                 }
                 
                 st.session_state.projets.append(nouveau_projet)
-                st.success(f"Projet '{nom_projet}' créé avec succès!")
+                st.success(f"✅ Projet '{nom_projet}' créé avec succès!")
+                st.info(f"📊 Total projets: {len(st.session_state.projets)}")
+                
+                # Réinitialiser les champs après création
+                st.session_state.nom_projet_input = ""
+                st.session_state.client_input = ""
+                st.session_state.adresse_input = ""
+                st.session_state.description_input = ""
+                st.session_state.budget_input = 0.0
+                
+                st.balloons()  # Animation de succès
                 st.rerun()
-            else:
-                st.error("Le nom du projet est obligatoire.")
+                
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la création: {str(e)}")
+        else:
+            st.error("❌ Le nom du projet est obligatoire.")
+    
+    # Affichage des projets existants en aperçu
+    if len(st.session_state.projets) > 0:
+        st.markdown("---")
+        st.subheader("📋 Projets récents")
+        for i, projet in enumerate(st.session_state.projets[-3:]):  # Afficher les 3 derniers
+            with st.expander(f"🏗️ {projet['nom_projet']} - {projet['statut']}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Type:** {projet['type_projet']}")
+                    st.write(f"**Client:** {projet['client']}")
+                with col2:
+                    st.write(f"**Budget:** {projet['budget']:,.0f} CAD")
+                    st.write(f"**Statut:** {projet['statut']}")
 
 # ========== GESTION DES PROJETS ==========
 elif page == "🏢 Projets":
